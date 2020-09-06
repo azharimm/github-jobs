@@ -3,17 +3,20 @@ import axios from 'axios';
 
 const INITIAL_STATE = {
     jobs: [],
-    loading: true
+    loading: false,
+    error: false,
+    hasNextPage: false
 };
 
 const ACTIONS = {
     MAKE_REQUEST: 'MAKE_REQUEST',
     GET_DATA: 'GET_DATA',
-    ERROR: 'ERROR'
+    ERROR: 'ERROR',
+    UPDATE_HAS_NEXT_PAGE: 'UPDATE_HAS_NEXT_PAGE'
 };
 
 const BASE_URL = 'https://jobs.github.com/positions.json';
-const herokuProxy = 'https://cors-anywhere.herokuapp.com';
+const allowOriginProxy = 'https://cors-anywhere.herokuapp.com';
 
 const reducer = (state, action) => {
     switch (action.type) {
@@ -28,6 +31,8 @@ const reducer = (state, action) => {
                 error: action.payload.error,
                 jobs: []
             };
+        case ACTIONS.UPDATE_HAS_NEXT_PAGE:
+            return {...state, hasNextPage: action.payload.hasNextPage}
         default:
             return state;
     }
@@ -39,7 +44,7 @@ const useFetch = (params, page) => {
         const cancelToken = axios.CancelToken.source();
         dispatch({ type: ACTIONS.MAKE_REQUEST });
         axios
-            .get(herokuProxy + '/' + BASE_URL, {
+            .get(allowOriginProxy + '/' + BASE_URL, {
                 cancelToken: cancelToken.token,
                 params: { markdown: true, page, ...params }
             })
@@ -53,9 +58,27 @@ const useFetch = (params, page) => {
                 if (axios.isCancel(e)) return;
                 dispatch({ type: ACTIONS.ERROR, payload: { error: e } });
             });
+        
+        const cancelToken2 = axios.CancelToken.source();
+        axios
+            .get(allowOriginProxy + '/' + BASE_URL, {
+                cancelToken: cancelToken2.token,
+                params: { markdown: true, page: page + 1, ...params }
+            })
+            .then((res) => {
+                dispatch({
+                    type: ACTIONS.UPDATE_HAS_NEXT_PAGE,
+                    payload: { hasNextPage: res.data.length !== 0 }
+                });
+            })
+            .catch((e) => {
+                if (axios.isCancel(e)) return;
+                dispatch({ type: ACTIONS.ERROR, payload: { error: e } });
+            });
 
         return () => {
             cancelToken.cancel();
+            cancelToken2.cancel();
         };
     }, [params, page]);
 
